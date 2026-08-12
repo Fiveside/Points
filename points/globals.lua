@@ -98,6 +98,7 @@ MessageMatch = T{};
 MessageMatch.ObtainedKI = "Obtained key item: \x1E\x03(.*)\x1E\x01";
 MessageMatch.DynaTimeEntry = "(\\d+) minutes .* remaining in Dynamis";
 MessageMatch.DynaTimeUpdate = "will be expelled from Dynamis in (\\d+) (minute|minutes|second|seconds)";
+MessageMatch.DynaTimeExtension = "Your stay in Dynamis has been extended by (\\d+) minutes.";
 MessageMatch.AbysseaTime = "visitant status will wear off in (\\d+) (minute|minutes|second|seconds)"
 MessageMatch.AbysseaRestLights1 = "Pearlescent: (\\d+) / Ebon: (\\d+).*Golden: (\\d+) / Silvery: (\\d+)";
 MessageMatch.AbysseaRestLights2 = "Azure: (\\d+) / Ruby: (\\d+) / Amber: (\\d+)";

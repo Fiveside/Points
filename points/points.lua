@@ -292,6 +292,12 @@ ashita.events.register('text_in', 'text_in_callback1', function (e)
                 timeset = timeset * 60;
                 return;
             end
+            results = ashita.regex.search(e.message, MessageMatch.DynaTimeExtension);
+            if (results ~= nil) then
+                local timeExt = tonumber(results[1][2]);
+                tValues.eventTimer = tValues.eventTimer + (timeExt * 60);
+                return;
+            end
             results = ashita.regex.search(e.message, MessageMatch.DynaTimeUpdate);
             if (results ~= nil) then
                 local timeLeft = tonumber(results[1][2]);
