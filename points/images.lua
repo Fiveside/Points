@@ -26,10 +26,9 @@ images.loadTextures = function(theme)
     if (res ~= C.S_OK) then
         error(('Failed to load image texture: %08X (%s)'):fmt(res, d3d.get_error(res)));
     end;
-    textures.jobicons = ffi.new('IDirect3DTexture8*', texture_ptr[0]);
-    -- d3d.gc_safe_release(textures.jobicons);
+    textures.jobicons = d3d.gc_safe_release(ffi.new('IDirect3DTexture8*', texture_ptr[0]));
 
-    return d3d.gc_safe_release(textures.jobicons);
+    return textures;
 end
 
 return images;

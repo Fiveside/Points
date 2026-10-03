@@ -473,6 +473,7 @@ ashita.events.register("d3d_present", "present_cb", function ()
 
     modman:setActiveTokens("[JobIcon] [Gil]");
     modman:drawBigBar();
+    modman:drawCompactBar();
 end);
 
 function DrawPointsBar(currJob)

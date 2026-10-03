@@ -116,6 +116,7 @@ function ModuleManager:drawBigBar()
         for _, token in ipairs(self.tokenList) do
             self.byToken[token]:drawBigBar(token);
         end
+        imgui.PopStyleColor();
 
         imgui.End();
     else
