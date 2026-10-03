@@ -32,25 +32,26 @@ addon.link      = "https://github.com/Shinzaku/Ashita4-Addons/points";
 require "common";
 require "globals";
 require "helpers";
+local points = require("config");
 local images = require("images");
 local ffi = require("ffi");
 local imgui = require("imgui");
 local fonts = require("fonts");
-local prims = require("primitives");
-local settings = require("settings");
-local config = require("config");
+local config = require("gui");
 local scaling = require("scaling");
+
+local modman = require("modules");
 
 local player = AshitaCore:GetMemoryManager():GetPlayer();
 local lastJob = 0;
 local lastZone = 0;
-local points = T{
-    loaded = false,
-    bar_is_open = T{ true, },
-    window_suffix = "",
-    use_both = false,
-    settings = settings.load(DefaultSettings)
-}
+-- local points = T{
+--     loaded = false,
+--     bar_is_open = T{ true, },
+--     window_suffix = "",
+--     use_both = false,
+--     settings = settings.load(DefaultSettings)
+-- }
 local guiimages = images.loadTextures(points.settings.theme);
 local tokenType = "default";
 local currTokens = {};
@@ -76,43 +77,16 @@ tValues.odyssey = T{ segments = 0, totalSegments = 0, izzat = 0, mMastery = 0, i
 tValues.sortie = T{ gallimaufry = 0 };
 tValues.zoneTimer = os.clock();
 
-local compactBar = T{};
-compactBar.wrapper = fonts.new(WrapperSettings);
-compactBar.wrapperIndent = "                  ";
-compactBar.jobicon = fonts.new(JobIconSettings);
-compactBar.jobiconIndent = "   ";
-compactBar.textObjs = T{};
+-- local compactBar = T{};
+-- compactBar.wrapper = fonts.new(WrapperSettings);
+-- compactBar.wrapperIndent = "                  ";
+-- compactBar.jobicon = fonts.new(JobIconSettings);
+-- compactBar.jobiconIndent = "   ";
+-- compactBar.textObjs = T{};
 
 local debugText = "";
 local zoning = false;
 
-local function UpdateSettings(s)
-    local zone = AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0);
-    local job = AshitaCore:GetMemoryManager():GetPlayer():GetMainJob();
-    -- Update the settings table..
-    if (s ~= nil) then
-        points.settings = s;
-    end
-
-    UpdateTokenList(zone, false, job);
-
-    -- Reapply the font settings..
-    for i,v in ipairs(compactBar.textObjs) do
-        v:apply(points.settings.compact.font);
-            if (currTokens[i] ~= nil and currTokens[i]:find("Bar]")) then
-                v.font_height = points.settings.compact.font.font_height - 5;
-                v.position_y = scaling.scale_h(2.5);
-            else
-                v.background.visible = false;
-                v.position_y = 0;
-            end
-    end
-
-    -- Save the current settings..
-    settings.save();
-end;
-
-settings.register('settings', 'settings_update', UpdateSettings);
 
 ----------------------------------------------------------------------------------------------------s
 -- func: load
@@ -496,6 +470,9 @@ ashita.events.register("d3d_present", "present_cb", function ()
         UpdateSettings();
         config.uiSettings.changed = false;
     end
+
+    modman:setActiveTokens("[JobIcon] [Gil]");
+    modman:drawBigBar();
 end);
 
 function DrawPointsBar(currJob)
