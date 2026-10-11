@@ -7,17 +7,28 @@ local Module = {};
 
 ---@class ModuleImplementation
 ---@field tokens string[]
----@field drawCompactBar fun(ModuleImplementation, string, LuaFontObject) Takes the mod, the token being rendered, and the font object to use
----@field drawBigBar fun(ModuleImplementation, string) Takes the mod, and the token being rendered
----@field activate fun(ModuleImplementation)? Lifecycle hook indicating this mod is now being used (optional)
----@field deactivate fun(ModuleImplementation)? Lifecycle hook indicating this mod is no longer being used (optional)
+---@field drawCompactBar fun(Module, string, LuaFontObject) Takes the mod, the token being rendered, and the font object to use
+---@field drawBigBar fun(Module, string) Takes the mod, and the token being rendered
+---@field activate fun(Module)? Lifecycle hook indicating this mod is now being used (optional)
+---@field deactivate fun(Module)? Lifecycle hook indicating this mod is no longer being used (optional)
 
+-- Do-nothing mod implementation to default back to.
+local emptyModule = {
+    activate = function() end,
+    deactivate = function() end,
+    drawBigBar = function() end,
+    drawCompactBar = function() end,
+}
 
 ---Create an instance of Module
----@param mod ModuleImplementation
-function Module.new(mod)
+---@param impl ModuleImplementation
+function Module.new(impl)
+    if #impl.tokens == 0 then
+        error("Tried to create a mod with no tokens?")
+    end
     local this = {
-        impl = mod,
+        impl = setmetatable(impl, {__index=emptyModule}),
+        tokens = impl.tokens,
         fontObjs = T{},
     };
     return setmetatable(this, {__index=Module});
@@ -42,10 +53,12 @@ function Module:activate()
     for _, token in ipairs(self.tokens) do
         self.fontObjs[token] = self:initFontObj(token)
     end
+    self.impl.activate(self);
 end
 
 ---Lifecycle hook called when this module is removed from the current active token list
 function Module:deactivate()
+    self.impl.deactivate(self);
     for _, txt in pairs(self.fontObjs) do
         txt:destroy()
     end
@@ -53,15 +66,11 @@ function Module:deactivate()
 end
 
 function Module:drawCompactBar(token)
+    self.impl.drawCompactBar(self, token);
 end
 
 function Module:drawBigBar(token)
+    self.impl.drawBigBar(self, token);
 end
-
----Create a module
----@param mod ModuleImplementation
-function createModule(mod)
-end
-
 
 return Module;

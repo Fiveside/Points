@@ -1,6 +1,6 @@
 local config = require('config');
 local events = require('events');
-local BaseModule = require('modules.base');
+local Module = require('modules.base');
 local imgui = require('imgui');
 
 
@@ -143,15 +143,31 @@ local function ratioString(xp, total)
     );
 end
 
-local Exp = setmetatable({}, {__index=BaseModule});
+-- local Exp = setmetatable({}, {__index=BaseModule});
 
-function Exp.new()
-    local this = BaseModule.new()
-    this.tokens = {"[XP]", "[XPHour]"}
-    return setmetatable(this, {__index=Exp})
-end
+-- function Exp.new()
+--     local this = BaseModule.new()
+--     this.tokens = {"[XP]", "[XPHour]"}
+--     return setmetatable(this, {__index=Exp})
+-- end
 
-function Exp:drawBigBar(token)
+-- function Exp:drawBigBar(token)
+--     if token == "[XP]" then
+--         imgui.Text("XP: " .. ratioString(currentExp, maxExp))
+--     elseif token == "[XPHour]" then
+--         imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)))
+--     end
+-- end
+
+-- function Exp:drawCompactBar(token)
+
+-- end
+
+local Exp = {
+    tokens = {"[XP]", "[XPHour]"}
+}
+
+function Exp.drawBigBar(mod, token)
     if token == "[XP]" then
         imgui.Text("XP: " .. ratioString(currentExp, maxExp))
     elseif token == "[XPHour]" then
@@ -159,8 +175,8 @@ function Exp:drawBigBar(token)
     end
 end
 
-function Exp:drawCompactBar(token)
-    local fontObj = self:getFontObj(token);
+function Exp.drawCompactBar(mod, token)
+    local fontObj = mod:getFontObj(token);
     if token == "[XP]" then
         fontObj:SetText("XP: " .. ratioString(currentExp, maxExp))
     elseif token == "[XPHour]" then
@@ -168,4 +184,4 @@ function Exp:drawCompactBar(token)
     end
 end
 
-return Exp.new();
+return Module.new(Exp);

@@ -33,10 +33,13 @@ function ModuleManager.new()
     return setmetatable(this, {__index=ModuleManager});
 end
 
-function ModuleManager:register(mod, ...)
-    local tokens = {...};
+function ModuleManager:register(mod)
+    local tokens = mod.tokens;
     self.all[mod] = mod;
     for _, token in ipairs(tokens) do
+        if self.byToken[token] ~= nil then
+            error("Multiple modules registered for token " .. token);
+        end
         self.byToken[token] = mod;
     end
 end
@@ -143,8 +146,8 @@ local modules = require('modules.modules');
 local ExpModule = require('modules.exp');
 
 local modman = ModuleManager.new();
-modman:register(modules.Gil, "[Gil]")
-modman:register(modules.JobIcon, "[JobIcon]")
-modman:register(ExpModule, "[XP]", "[XPHour]")
+modman:register(modules.Gil)
+modman:register(modules.JobIcon)
+modman:register(ExpModule)
 
 return modman;

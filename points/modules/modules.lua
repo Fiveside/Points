@@ -5,6 +5,7 @@ local images = require('images');
 local imgui = require('imgui');
 local ffi = require('ffi')
 local Module = require('modules.base')
+local events = require('events');
 
 ------------------
 --- Gil
@@ -16,19 +17,23 @@ local function formatGil()
     return string.format("%s G", SeparateNumbers(gil.Count, config.settings.num_separator));
 end
 
-local Gil = setmetatable({}, {__index=Module});
-function Gil.new()
-    local this = Module.new();
-    this.tokens = T{"[Gil]"}
-    return setmetatable(this, {__index=Gil});
-end
+-- local Gil = setmetatable({}, {__index=Module});
+-- function Gil.new()
+--     local this = Module.new();
+--     this.tokens = T{"[Gil]"}
+--     return setmetatable(this, {__index=Gil});
+-- end
 
-function Gil:drawBigBar(token)
+local Gil = {
+    tokens = T{"[Gil]"}
+}
+
+function Gil.drawBigBar(mod, token)
     imgui.Text(formatGil());
 end
 
-function Gil:drawCompactBar(token)
-    self:getFontObj(token):SetText(formatGil());
+function Gil.drawCompactBar(mod, token)
+    mod:getFontObj(token):SetText(formatGil());
 end
 
 ------------------
@@ -37,20 +42,20 @@ end
 
 local scaling = require("scaling");
 
-local JobIcon = setmetatable({}, {__index=Module});
-function JobIcon.new()
-    local this = Module.new();
-    this.tokens = T{'[JobIcon]'}
-    return setmetatable(this, {__index=JobIcon});
-end
+local bigIconTexture = nil;
+events.load:on(function()
+    -- TODO: themes
+    bigIconTexture = images.loadTextures('default').jobicons
+end);
 
-function JobIcon:activate()
-    -- Super() call
-    Module.activate(self);
+local JobIcon = {
+    tokens = T{'[JobIcon]'}
+}
 
+function JobIcon.activate(mod)
     -- TODO: themes
     local texturePath = string.format("%s/themes/%s/ffxi-jobicons-compact.png", addon.path, "default");
-    for _, obj in pairs(self.fontObjs) do
+    for _, obj in pairs(mod.fontObjs) do
         obj.auto_resize = false;
         obj.font_height = scaling.scale_f(10);
         obj.font_family = "Consolas";
@@ -61,13 +66,10 @@ function JobIcon:activate()
         obj.background.scale_x = scaling.scaled.w;
         obj.background.scale_y = scaling.scaled.h;
     end
-
-    -- TODO: themes
-    self.bigIconTexture = images.loadTextures('default').jobicons
 end
 
 
-function JobIcon:drawBigBar(token)
+function JobIcon.drawBigBar(mod, token)
     local player = AshitaCore:GetMemoryManager():GetPlayer();
     local currJob = player:GetMainJob();
     local jobLevel = player:GetMainJobLevel();
@@ -80,7 +82,7 @@ function JobIcon:drawBigBar(token)
         local imgOffsetY = 0.25 * math.floor((currJob - 1) / 6.0);
         local imgOffsetX2 = imgOffsetX + (1.0 / (384 / 64.0));
         local imgOffsetY2 = imgOffsetY + 0.25;
-        imgui.Image(tonumber(ffi.cast("uint32_t", self.bigIconTexture)), { 64 * config.settings.font_scale, 32 * config.settings.font_scale }, { imgOffsetX, imgOffsetY }, { imgOffsetX2, imgOffsetY2 }, { 1, 1, 1, 1 }, { 1, 1, 1, 0 });
+        imgui.Image(tonumber(ffi.cast("uint32_t", bigIconTexture)), { 64 * config.settings.font_scale, 32 * config.settings.font_scale }, { imgOffsetX, imgOffsetY }, { imgOffsetX2, imgOffsetY2 }, { 1, 1, 1, 1 }, { 1, 1, 1, 0 });
         imgui.SetCursorPos({ 43 * config.settings.font_scale, 0 });
         imgui.PushStyleVar(ImGuiStyleVar_FramePadding, { 0, 5 });
         imgui.AlignTextToFramePadding();
@@ -112,11 +114,11 @@ local function hasMasterBreaker()
     return AshitaCore:GetMemoryManager():GetPlayer():HasKeyItem(masterBreakerKIID);
 end
 
-function JobIcon:drawCompactBar(token)
+function JobIcon.drawCompactBar(mod, token)
     local player = AshitaCore:GetMemoryManager():GetPlayer();
     local currJob = player:GetMainJob();
     local jobLevel = player:GetMainJobLevel();
-    local icon = self:getFontObj(token);
+    local icon = mod:getFontObj(token);
 
     if (config.settings.use_job_icon[1]) then
         local imgOffsetX = 64 * math.fmod(currJob - 1.0, 6.0);
@@ -136,6 +138,6 @@ function JobIcon:drawCompactBar(token)
 end
 
 return {
-    Gil = Gil.new(),
-    JobIcon = JobIcon.new(),
+    Gil = Module.new(Gil),
+    JobIcon = Module.new(JobIcon),
 }
