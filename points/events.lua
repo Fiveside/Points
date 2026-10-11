@@ -1,4 +1,4 @@
--- Light wrapper over some events to make global setup and shutdown simple.
+-- Translating low level events into higher level ones.
 
 ---@class EventEmitter
 local EventEmitter = {};
@@ -12,7 +12,7 @@ end
 
 function EventEmitter:on(callback)
     self.handlers[callback] = callback;
-    return self.off:bindn(self, callback);
+    -- return self.off:bind(self, callback);
 end
 
 function EventEmitter:off(callback)
@@ -33,22 +33,138 @@ function EventEmitter:trigger(...)
     end
 end
 
-local packetIn = EventEmitter.new();
+local function interval(time, callback)
+    local coro = nil;
+    local function runner()
+        callback();
+        coro = ashita.tasks.once(time, runner);
+    end
+    coro = ashita.tasks.once(runner);
+    return function()
+        coroutine.kill(coro);
+    end
+end
 
-local Export = {
+-- Direct events in ashita's event system
+local load = EventEmitter.new();
+ashita.events.register("load", "Events_load", load.trigger:bind(load));
+
+local unload = EventEmitter.new();
+ashita.events.register("unload", "Events_unload", unload.trigger:bind(unload));
+
+local packetIn = EventEmitter.new();
+ashita.events.register("packet_in", "Events_packetIn", packetIn.trigger:bind(packetIn));
+unload:once(ashita.events.unregister:bindn("packet_in", "Events_packetIn"));
+
+local render = EventEmitter.new();
+ashita.events.register("d3d_present", "Events_render", render.trigger:bind(render));
+unload:once(ashita.events.unregister:bindn("d3d_present", "Events_render"));
+
+local textIn = EventEmitter.new();
+ashita.events.register("text_in", "Events_textIn", textIn.trigger:bind(textIn));
+unload:once(ashita.events.unregister:bindn("text_in", "Events_textIn"));
+
+-- Computed events
+
+local eachSecond = EventEmitter.new();
+render:once(function()
+    -- We can't schedule a coro inside the load callback because
+    -- the addon state doesn't transition out of the loading phase until all coroutines have exited.
+    -- So instead we schedule it during the first render hook.
+    local terminate = interval(1, eachSecond.trigger:bind(eachSecond));
+    unload:once(terminate);
+end);
+
+-- Events for individual packet IDs
+local packetIdCache = {};
+local packetIdIndex = function(table, key)
+    if packetIdCache[key] ~= nil then
+        return packetIdCache[key];
+    end
+    local emitter = EventEmitter.new()
+    packetIdCache[key] = emitter;
+    return emitter;
+end
+packetIn:on(function(pkt)
+    local emitter = packetIdCache[pkt.id];
+    if emitter ~= nil then
+        emitter:trigger(pkt);
+    end
+end);
+
+local packetId = setmetatable({}, {__index=packetIdIndex});
+
+
+local Events = {
+    load = load,
+    unload = unload,
+    render = render,
     packetIn = packetIn,
+    textIn = textIn,
+    eachSecond = eachSecond,
+    packetId = packetId,
+
+    -- XI spends a lot of time without a character fully loaded: when logged out and while loading after a zone.
+    -- This event fires when a character has finished loading and all data is fully hydrated.
+    -- Its also called once on addon load if the addon is loaded while the character is in a ready state.
+    zoningComplete = EventEmitter.new(),
 };
 
--- this is probably best done closer to the addon's entrypoint?
-function Export.install()
-    ashita.events.register('packet_in', 'Events.onPacketIn', function(pkt)
-        packetIn:trigger(pkt);
-    end);
-end
 
-function Export.uninstall()
-    ashita.events.unregister('packetIn', 'Events.onPacketIn');
+-- Zoning check.
+local zoning = true;
+function Events.isZoning()
+    return zoning;
 end
+packetId[0x001D]:on(function(pkt)
+    -- Checking this instead of 0x000A because:
+    -- 0x000A is received when the screen begins transitioning back from the black loading screen to the game
+    -- 0x001D is received when the inventory sync state changes.
+    -- For our purposes, the zone is only complete once the inventory has synced after a zone in.
+    if not zoning then return; end
 
--- Temporary while we're refactoring
-Export.install();
+    local state = ashita.bits.unpack_be(pkt.data_raw, 32, 8);
+    if state ~= 1 then return; end
+
+    zoning = false;
+    local party = AshitaCore:GetMemoryManager():GetParty();
+    Events.zoningComplete:trigger(party:GetMemberZone(0));
+end);
+packetId[0x000B]:on(function(pkt)
+    zoning = true;
+end);
+load:on(function()
+    local mem = AshitaCore:GetMemoryManager();
+    local party = mem:GetParty();
+    if party == nil then
+        return;
+    end
+
+    local playerEnt = GetPlayerEntity();
+    if playerEnt == nil or playerEnt.StatusServer == 4 then
+        return;
+    end
+
+    zoning = false;
+    Events.zoningComplete:trigger(party:GetMemberZone(0));
+end);
+
+-- packetId[0x000A]:on(function(pkt)
+--     local zoningFlag = struct.unpack('b', pkt.data_modified, 0x80+0x01);
+--     print(string.format("Zoning flag: %d", zoningFlag));
+-- end)
+
+-- Events.zoningComplete:on(function(zoneId)
+--     local player = AshitaCore:GetMemoryManager():GetPlayer();
+-- end)
+
+-- -- General player update.
+-- packetId[0x0061]:on(function(pkt)
+--     local currentExp = struct.unpack("H", pkt.data_modified, 0x011);
+--     local maxExp = struct.unpack("H", pkt.data_modified, 0x13);
+--     local currentMastery = struct.unpack("I", pkt.data_modified, 0x69);
+--     local maxMastery = struct.unpack("I", pkt.data_modified, 0x6D);
+-- 	local currentAccolades = math.floor(pkt.data_modified:byte(0x5A) / 4) + pkt.data_modified:byte(0x5B) * 2 ^ 6 + pkt.data_modified:byte(0x5C) * 2 ^ 14;
+-- end)
+
+return Events;

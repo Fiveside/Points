@@ -1,17 +1,29 @@
+local fonts = require('fonts');
+
+
 ---@class Module
----@field textObjs table<string, LuaFontObject> Mapping of tokens to their font objects.
+---@field fontObjs table<string, LuaFontObject> Mapping of tokens to their font objects.
 local Module = {};
 
----Create an instance of Module
-function Module.new()
+---@class ModuleImplementation
+---@field tokens string[]
+---@field drawCompactBar fun(ModuleImplementation, string, LuaFontObject) Takes the mod, the token being rendered, and the font object to use
+---@field drawBigBar fun(ModuleImplementation, string) Takes the mod, and the token being rendered
+---@field activate fun(ModuleImplementation)? Lifecycle hook indicating this mod is now being used (optional)
+---@field deactivate fun(ModuleImplementation)? Lifecycle hook indicating this mod is no longer being used (optional)
 
+
+---Create an instance of Module
+---@param mod ModuleImplementation
+function Module.new(mod)
     local this = {
-        textObjs = T{},
+        impl = mod,
+        fontObjs = T{},
     };
     return setmetatable(this, {__index=Module});
 end
 
-function Module:initTextObj(token)
+function Module:initFontObj(token)
     -- TODO: move this back to something configurable.
     return fonts.new(T{
         visible = true,
@@ -21,29 +33,34 @@ function Module:initTextObj(token)
     });
 end
 
-function Module:getTextObj(token)
-    return self.textObjs[token];
+function Module:getFontObj(token)
+    return self.fontObjs[token];
 end
 
 ---Lifecycle hook called when this module is added to the current active token list
 function Module:activate()
     for _, token in ipairs(self.tokens) do
-        self.textObjs[token] = self:initTextObj(token)
+        self.fontObjs[token] = self:initFontObj(token)
     end
 end
 
 ---Lifecycle hook called when this module is removed from the current active token list
 function Module:deactivate()
-    for _, txt in pairs(self.textObjs) do
+    for _, txt in pairs(self.fontObjs) do
         txt:destroy()
     end
-    self.textObjs:clear();
+    self.fontObjs:clear();
 end
 
 function Module:drawCompactBar(token)
 end
 
 function Module:drawBigBar(token)
+end
+
+---Create a module
+---@param mod ModuleImplementation
+function createModule(mod)
 end
 
 

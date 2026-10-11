@@ -471,7 +471,7 @@ ashita.events.register("d3d_present", "present_cb", function ()
         config.uiSettings.changed = false;
     end
 
-    modman:setActiveTokens("[JobIcon] [Gil]");
+    modman:setActiveTokens("[JobIcon] [Gil] [XP] [XPHour]");
     modman:drawBigBar();
     modman:drawCompactBar();
 end);

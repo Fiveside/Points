@@ -28,7 +28,7 @@ function Gil:drawBigBar(token)
 end
 
 function Gil:drawCompactBar(token)
-    self:getTextObj(token):SetText(formatGil());
+    self:getFontObj(token):SetText(formatGil());
 end
 
 ------------------
@@ -50,7 +50,7 @@ function JobIcon:activate()
 
     -- TODO: themes
     local texturePath = string.format("%s/themes/%s/ffxi-jobicons-compact.png", addon.path, "default");
-    for _, obj in pairs(self.textObjs) do
+    for _, obj in pairs(self.fontObjs) do
         obj.auto_resize = false;
         obj.font_height = scaling.scale_f(10);
         obj.font_family = "Consolas";
@@ -116,7 +116,7 @@ function JobIcon:drawCompactBar(token)
     local player = AshitaCore:GetMemoryManager():GetPlayer();
     local currJob = player:GetMainJob();
     local jobLevel = player:GetMainJobLevel();
-    local icon = self:getTextObj(token);
+    local icon = self:getFontObj(token);
 
     if (config.settings.use_job_icon[1]) then
         local imgOffsetX = 64 * math.fmod(currJob - 1.0, 6.0);

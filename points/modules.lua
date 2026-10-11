@@ -94,7 +94,7 @@ function ModuleManager:setActiveTokens(tokens)
     self.compactWrapper.visible = config.settings.use_compact_ui[1];
     for _, token in pairs(self.tokenList) do
         local mod = self.byToken[token];
-        local fontObj = mod:getTextObj(token);
+        local fontObj = mod:getFontObj(token);
         fontObj.visible = true;
         fontObj.parent = self.compactWrapper;
         fontObj.can_focus = false;
@@ -113,11 +113,18 @@ function ModuleManager:drawBigBar()
         -- ???
         imgui.PopStyleColor(3);
         imgui.PushStyleColor(ImGuiCol_Text, config.settings.colors.mainText);
-        for _, token in ipairs(self.tokenList) do
+        for idx, token in ipairs(self.tokenList) do
             self.byToken[token]:drawBigBar(token);
+            if idx ~= #self.tokenList then
+                imgui.SameLine();
+            end
         end
-        imgui.PopStyleColor();
 
+        -- Hack to fix padding
+        imgui.SameLine();
+        imgui.Text(" ")
+
+        imgui.PopStyleColor();
         imgui.End();
     else
         -- ???
@@ -133,9 +140,11 @@ function ModuleManager:drawCompactBar()
 end
 
 local modules = require('modules.modules');
+local ExpModule = require('modules.exp');
 
 local modman = ModuleManager.new();
 modman:register(modules.Gil, "[Gil]")
 modman:register(modules.JobIcon, "[JobIcon]")
+modman:register(ExpModule, "[XP]", "[XPHour]")
 
 return modman;
