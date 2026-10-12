@@ -71,8 +71,9 @@ function ModuleManager:setActiveTokens(tokens)
     self:reflowCompactBar();
 end
 
--- Re-flow the compact bar because one or more values have updated.
+-- Re-position all font objects in the compact bar because one or more values have updated.
 function ModuleManager:reflowCompactBar()
+    -- TODO: this needs to be re-ported from the existing implementation, right now it stacks them all on top of eachother.
     self.compactWrapper.auto_resize = false;
     self.compactWrapper.background.visible = true;
     self.compactWrapper.background.color = RGBAtoHex(config.settings.colors.bg);
@@ -158,12 +159,11 @@ function ModuleManager:hideCompactBar()
     end
 end
 
-local modules = require('modules.modules');
 local expModules = require('modules.exp');
 
 local modman = ModuleManager.new();
-modman:register(modules.Gil, "[Gil]")
-modman:register(modules.JobIcon, "[JobIcon]")
+modman:register(require('modules.gil'), "[Gil]")
+modman:register(require('modules.jobicon'), "[JobIcon]")
 modman:register(expModules.XP, "[XP]")
 modman:register(expModules.XPHour, "[XPHour]")
 
@@ -174,6 +174,6 @@ events.zoning.begin:on(function()
 end);
 events.zoning.complete:on(function()
     modman:showCompactBar();
-end)
+end);
 
 return modman;
