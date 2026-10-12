@@ -8,16 +8,14 @@ local imgui = require('imgui');
 local currentExp = 0;
 local maxExp = 1;
 
-local currentMastery = 0;
-local maxMastery = 1;
+-- local currentMastery = 0;
+-- local maxMastery = 1;
 
-local currentAccolades = 0;
+-- local currentAccolades = 0;
 
 ---@type {time:number, xp:number}[]
 local xpKills = T{{time = os.time(), xp = 1000}, {time = os.time() - 60, xp = 1500}};
 local xpChain = 0;
-
--- chain info, number and timestamp.
 local lastKill = 0;
 
 local function recordXpGain(xp, chain)
@@ -36,6 +34,7 @@ local xpHr = 0;
 -- local timeAvg = 0;
 
 events.eachSecond:on(function()
+    -- This function is generating wrong values right now.
     local lastStamp = os.time()
     local allDeltas = 0;
     local allXp = 0;
@@ -44,7 +43,6 @@ events.eachSecond:on(function()
         allDeltas = allDeltas + (lastStamp - entry.time);
         lastStamp = entry.time;
     end
-    -- print(string.format("Exp: %d, %d", allXp, allDeltas));
     xpHr = allXp/((allDeltas/60));
 end)
 

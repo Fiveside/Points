@@ -12,7 +12,6 @@ end
 
 function EventEmitter:on(callback)
     self.handlers[callback] = callback;
-    -- return self.off:bind(self, callback);
 end
 
 function EventEmitter:off(callback)
@@ -92,8 +91,8 @@ packetIn:on(function(pkt)
     end
 end);
 
+---@type table<integer, EventEmitter>
 local packetId = setmetatable({}, {__index=packetIdIndex});
-
 
 local Events = {
     load = load,
@@ -116,6 +115,9 @@ local zoning = true;
 function Events.isZoning()
     return zoning;
 end
+packetId[0x000B]:on(function(pkt)
+    zoning = true;
+end);
 packetId[0x001D]:on(function(pkt)
     -- Checking this instead of 0x000A because:
     -- 0x000A is received when the screen begins transitioning back from the black loading screen to the game
@@ -123,17 +125,15 @@ packetId[0x001D]:on(function(pkt)
     -- For our purposes, the zone is only complete once the inventory has synced after a zone in.
     if not zoning then return; end
 
-    local state = ashita.bits.unpack_be(pkt.data_raw, 32, 8);
+    local state = ashita.bits.unpack_be(pkt.data_raw, 0x20, 8);
     if state ~= 1 then return; end
 
     zoning = false;
     local party = AshitaCore:GetMemoryManager():GetParty();
     Events.zoningComplete:trigger(party:GetMemberZone(0));
 end);
-packetId[0x000B]:on(function(pkt)
-    zoning = true;
-end);
 load:on(function()
+    -- TODO: can most of this be replaced with player:GetIsZoning()?
     local mem = AshitaCore:GetMemoryManager();
     local party = mem:GetParty();
     if party == nil then
@@ -148,23 +148,5 @@ load:on(function()
     zoning = false;
     Events.zoningComplete:trigger(party:GetMemberZone(0));
 end);
-
--- packetId[0x000A]:on(function(pkt)
---     local zoningFlag = struct.unpack('b', pkt.data_modified, 0x80+0x01);
---     print(string.format("Zoning flag: %d", zoningFlag));
--- end)
-
--- Events.zoningComplete:on(function(zoneId)
---     local player = AshitaCore:GetMemoryManager():GetPlayer();
--- end)
-
--- -- General player update.
--- packetId[0x0061]:on(function(pkt)
---     local currentExp = struct.unpack("H", pkt.data_modified, 0x011);
---     local maxExp = struct.unpack("H", pkt.data_modified, 0x13);
---     local currentMastery = struct.unpack("I", pkt.data_modified, 0x69);
---     local maxMastery = struct.unpack("I", pkt.data_modified, 0x6D);
--- 	local currentAccolades = math.floor(pkt.data_modified:byte(0x5A) / 4) + pkt.data_modified:byte(0x5B) * 2 ^ 6 + pkt.data_modified:byte(0x5C) * 2 ^ 14;
--- end)
 
 return Events;

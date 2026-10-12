@@ -41,6 +41,7 @@ local config = require("gui");
 local scaling = require("scaling");
 
 local modman = require("modules");
+local events = require("events");
 
 local player = AshitaCore:GetMemoryManager():GetPlayer();
 local lastJob = 0;
@@ -471,9 +472,10 @@ ashita.events.register("d3d_present", "present_cb", function ()
         config.uiSettings.changed = false;
     end
 
-    modman:setActiveTokens("[JobIcon] [Gil] [XP] [XPHour]");
-    modman:drawBigBar();
-    modman:drawCompactBar();
+    if not events.isZoning() then
+        modman:drawBigBar();
+        modman:drawCompactBar();
+    end
 end);
 
 function DrawPointsBar(currJob)
@@ -856,6 +858,9 @@ function UpdateTokenList(zoneId, reset, jobId)
     if ((#tValues.default.xpKills > 0 or #tValues.default.cpKills > 0) and reset) then
         ResetXPCPRates();
     end
+
+    -- TODO: make configurable
+    modman:setActiveTokens("[JobIcon] [Gil] [XP] [XPHour]")
 end
 
 function ResetXPCPRates()    
