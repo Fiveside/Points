@@ -5,80 +5,74 @@ local fonts = require('fonts');
 local config = require("config");
 local scaling = require("scaling");
 local imgui = require('imgui');
+local events = require("events");
 
 ---@class ModuleManager
+---@field private all table<Module, Module> set of all registered modules
+---@field private byToken table<string, Module> mapping of a token to the module that handles it.
+---@field private active table<Module, fun()> mapping of activated modules to handles that stop our listening to them.
+---@field private tokens string[] The list of active tokens in render order.
+---@field private compactWrapper LuaFontObject The wrapper for the entire compact bar
 local ModuleManager = {};
 
+---Create a new empty manager.
+---@return ModuleManager
 function ModuleManager.new()
     local this = {
-        -- set of all registered modules
-        ---@type table<Module, Module>
         all = T{},
-
-        -- mapping of a token to the module that handles it.
-        ---@type table<string, Module>
         byToken = T{},
-
-        -- set of all activated modules
-        ---@type table<Module, Module>
         active = T{},
-
-        -- The list of active tokens in render order.
-        ---@type string[]
         tokens = T{},
-
-        -- The compact bar's wrapper font object.
         compactWrapper = fonts.new(WrapperSettings),
     };
     return setmetatable(this, {__index=ModuleManager});
 end
 
-function ModuleManager:register(mod)
-    local tokens = mod.tokens;
-    self.all[mod] = mod;
-    for _, token in ipairs(tokens) do
-        if self.byToken[token] ~= nil then
-            error("Multiple modules registered for token " .. token);
-        end
-        self.byToken[token] = mod;
+function ModuleManager:register(mod, token)
+    if self.byToken[token] ~= nil then
+        error("Multiple modules registered for token " .. token);
     end
+    self.byToken[token] = mod;
+    self.all[mod] = mod;
 end
 
 ---Reconfigure the list of active modules
 ---@param tokens string list of tokens we want to activate
 function ModuleManager:setActiveTokens(tokens)
-    self.tokenList = ashita.regex.split(tokens, " ");
-    
+    self.tokens = ashita.regex.split(tokens, " ");
+
     ---@type table<Module, Module>
     local newActive = T{};
 
     ---@type Module[]
     local toActivate = T{};
 
-    ---@type table<Module, Module>
+    ---@type table<Module, fun()>
     local toDeactivate = self.active:copy(false);
 
-
-    -- Split into multiple passes because one token may map to multiple modules.
-    for _, token in ipairs(self.tokenList) do
+    for _, token in ipairs(self.tokens) do
         local mod = self.byToken[token];
         toDeactivate[mod] = nil;
-        newActive[mod] = mod;
         if self.active[mod] == nil then
-            table.insert(toActivate, self.byToken[token]);
+            mod:activate();
+            mod:updateCompactBar();
+            self.active[mod] = mod.needsUpdate:on(function()
+                mod:updateCompactBar();
+                self:reflowCompactBar();
+            end);
         end
     end
-    for _, mod in pairs(toActivate) do
-        mod:activate();
-    end
-    for _, mod in pairs(toDeactivate) do
+
+    for mod, stopListening in pairs(toDeactivate) do
+        stopListening();
         mod:deactivate();
     end
-    self.active = newActive;
 
-    -- Font objects in the compact bar need extra setup
-    -- TODO: find some place better to do this wrapper reconfiguration.
-    -- Also this loop overwrites some of the settings defined in each module.
+    self:reflowCompactBar();
+end
+
+-- Re-flow the compact bar because one or more values have updated.
+function ModuleManager:reflowCompactBar()
     self.compactWrapper.auto_resize = false;
     self.compactWrapper.background.visible = true;
     self.compactWrapper.background.color = RGBAtoHex(config.settings.colors.bg);
@@ -92,13 +86,19 @@ function ModuleManager:setActiveTokens(tokens)
     self.compactWrapper.background.border_sizes = bSizes;
     self.compactWrapper.background.border_visible = true;
     self.compactWrapper.lockedz = true;
+
+    -- self.compactWrapper.position_x = scaling.scale_w(config.settings.compact.x);
+    -- self.compactWrapper.position_y = scaling.scale_h(config.settings.compact.y);
     self.compactWrapper.position_x = scaling.scale_w(config.settings.compact.x);
-    self.compactWrapper.position_y = scaling.scale_h(config.settings.compact.y);
-    self.compactWrapper.visible = config.settings.use_compact_ui[1];
-    for _, token in pairs(self.tokenList) do
-        local mod = self.byToken[token];
-        local fontObj = mod:getFontObj(token);
-        fontObj.visible = true;
+    self.compactWrapper.position_y = scaling.scale_h(scaling.menu.h/2);
+    -- self.compactWrapper.visible = true;
+
+    self.compactWrapper.background.color = RGBAtoHex(config.settings.colors.bg);
+    self.compactWrapper.background.border_color = RGBAtoHex(config.settings.colors.bgBorder);
+
+    for _, token in pairs(self.tokens) do
+        local fontObj = self.byToken[token].fontObj;
+        -- fontObj.visible = true;
         fontObj.parent = self.compactWrapper;
         fontObj.can_focus = false;
         fontObj.locked = true;
@@ -116,9 +116,9 @@ function ModuleManager:drawBigBar()
         -- ???
         imgui.PopStyleColor(3);
         imgui.PushStyleColor(ImGuiCol_Text, config.settings.colors.mainText);
-        for idx, token in ipairs(self.tokenList) do
-            self.byToken[token]:drawBigBar(token);
-            if idx ~= #self.tokenList then
+        for idx, token in ipairs(self.tokens) do
+            self.byToken[token]:drawBigBar();
+            if idx ~= #self.tokens then
                 imgui.SameLine();
             end
         end
@@ -136,18 +136,44 @@ function ModuleManager:drawBigBar()
     imgui.PopStyleVar(1);
 end
 
-function ModuleManager:drawCompactBar()
-    for _, token in ipairs(self.tokenList) do
-        self.byToken[token]:drawCompactBar(token);
+
+function ModuleManager:showCompactBar()
+    self.compactWrapper.visible = true;
+    -- self.compactWrapper.background.visible = true;
+
+    for _, token in ipairs(self.tokens) do
+        local mod = self.byToken[token];
+        mod:updateCompactBar();
+        mod.fontObj.visible = true;
+    end
+
+    self:reflowCompactBar()
+end
+
+function ModuleManager:hideCompactBar()
+    -- self.compactWrapper.background.visible = false;
+    self.compactWrapper.visible = false;
+    for mod in pairs(self.active) do
+        mod.fontObj.visible = false;
     end
 end
 
 local modules = require('modules.modules');
-local ExpModule = require('modules.exp');
+local expModules = require('modules.exp');
 
 local modman = ModuleManager.new();
-modman:register(modules.Gil)
-modman:register(modules.JobIcon)
-modman:register(ExpModule)
+modman:register(modules.Gil, "[Gil]")
+modman:register(modules.JobIcon, "[JobIcon]")
+modman:register(expModules.XP, "[XP]")
+modman:register(expModules.XPHour, "[XPHour]")
+
+
+-- TODO: this really belongs somewhere else
+events.zoning.begin:on(function()
+    modman:hideCompactBar();
+end);
+events.zoning.complete:on(function()
+    modman:showCompactBar();
+end)
 
 return modman;

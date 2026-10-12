@@ -1,40 +1,22 @@
 local fonts = require('fonts');
-
-
----@class Module
----@field fontObjs table<string, LuaFontObject> Mapping of tokens to their font objects.
-local Module = {};
+local events = require('events');
 
 ---@class ModuleImplementation
----@field tokens string[]
----@field drawCompactBar fun(Module, string, LuaFontObject) Takes the mod, the token being rendered, and the font object to use
----@field drawBigBar fun(Module, string) Takes the mod, and the token being rendered
----@field activate fun(Module)? Lifecycle hook indicating this mod is now being used (optional)
----@field deactivate fun(Module)? Lifecycle hook indicating this mod is no longer being used (optional)
+---@field updateCompactBar fun(Module, LuaFontObject)? Draw bar elements using a font object
+---@field drawBigBar fun(Module)? Draw bar elements using imgui
+---@field activate fun(Module, LuaFontObject)? Lifecycle hook indicating this mod is now being used
+---@field deactivate fun(Module)? Lifecycle hook indicating this mod is no longer being used
+---@field initFontObj fun(Module)? Creates the font object. Define to create the font object yourself
 
 -- Do-nothing mod implementation to default back to.
+---@type ModuleImplementation
 local emptyModule = {
-    activate = function() end,
-    deactivate = function() end,
-    drawBigBar = function() end,
-    drawCompactBar = function() end,
+    activate = function(mod) end,
+    deactivate = function(mod) end,
+    drawBigBar = function(mod) end,
+    updateCompactBar = function(mod, fontObj) end,
 }
-
----Create an instance of Module
----@param impl ModuleImplementation
-function Module.new(impl)
-    if #impl.tokens == 0 then
-        error("Tried to create a mod with no tokens?")
-    end
-    local this = {
-        impl = setmetatable(impl, {__index=emptyModule}),
-        tokens = impl.tokens,
-        fontObjs = T{},
-    };
-    return setmetatable(this, {__index=Module});
-end
-
-function Module:initFontObj(token)
+function emptyModule.initFontObj(mod)
     -- TODO: move this back to something configurable.
     return fonts.new(T{
         visible = true,
@@ -44,33 +26,51 @@ function Module:initFontObj(token)
     });
 end
 
-function Module:getFontObj(token)
-    return self.fontObjs[token];
+---@class Module
+---@field fontObj LuaFontObject The font object used in rendering.
+---@field impl ModuleImplementation The client code that is actually used during rendering.
+---@field needsUpdate EventEmitter Used to notify interested parties that values have changed.
+local Module = {};
+
+---Create an instance of Module.  This manages the font object lifetime and default implementations.
+---@param impl ModuleImplementation
+---@return Module
+function Module.new(impl)
+    local emitter = events.EventEmitter.new();
+    local this = {
+        impl = setmetatable(impl, {__index=emptyModule}),
+        fontObj = nil,
+        needsUpdate = emitter;
+    };
+    local obj = setmetatable(this, {__index=Module});
+    return obj;
 end
 
----Lifecycle hook called when this module is added to the current active token list
+---Lifecycle hook called when this module is added to the current active token list.
 function Module:activate()
-    for _, token in ipairs(self.tokens) do
-        self.fontObjs[token] = self:initFontObj(token)
-    end
-    self.impl.activate(self);
+    self.fontObj = self.impl.initFontObj(self)
+    self.impl.activate(self, self.fontObj);
 end
 
----Lifecycle hook called when this module is removed from the current active token list
+---Lifecycle hook called when this module is removed from the current active token list.
 function Module:deactivate()
     self.impl.deactivate(self);
-    for _, txt in pairs(self.fontObjs) do
-        txt:destroy()
-    end
-    self.fontObjs:clear();
+    self.fontObj:destroy();
 end
 
-function Module:drawCompactBar(token)
-    self.impl.drawCompactBar(self, token);
+---Called after activation and when the module is notified of an update.
+function Module:updateCompactBar()
+    self.impl.updateCompactBar(self, self.fontObj);
 end
 
-function Module:drawBigBar(token)
-    self.impl.drawBigBar(self, token);
+---Called each frame during the d3d_present render phase.
+function Module:drawBigBar()
+    self.impl.drawBigBar(self);
+end
+
+---Call this when a value has changed and the compact bar needs to be updated with the new value.
+function Module:update()
+    self.needsUpdate:trigger();
 end
 
 return Module;

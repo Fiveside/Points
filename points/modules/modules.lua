@@ -1,6 +1,5 @@
 require("common");
 local config = require('config');
-local fonts = require("fonts");
 local images = require('images');
 local imgui = require('imgui');
 local ffi = require('ffi')
@@ -11,30 +10,46 @@ local events = require('events');
 --- Gil
 ------------------
 
-local function formatGil()
+local function formatGil(gil)
+    return string.format("%s G", SeparateNumbers(gil, config.settings.num_separator));
+end
+
+local currentGil = 0;
+local function tryUpdateGil()
+    if events.isZoning() then
+        return;
+    end
     local gil = AshitaCore:GetMemoryManager():GetInventory():GetContainerItem(0, 0);
-    ---@cast gil -?
-    return string.format("%s G", SeparateNumbers(gil.Count, config.settings.num_separator));
+    if gil ~= nil and gil.Count ~= currentGil then
+        currentGil = gil.Count;
+        return true;
+    end
+    return false;
 end
 
--- local Gil = setmetatable({}, {__index=Module});
--- function Gil.new()
---     local this = Module.new();
---     this.tokens = T{"[Gil]"}
---     return setmetatable(this, {__index=Gil});
--- end
+local GilProto = {}
 
-local Gil = {
-    tokens = T{"[Gil]"}
-}
-
-function Gil.drawBigBar(mod, token)
-    imgui.Text(formatGil());
+function GilProto.activate()
+    tryUpdateGil();
 end
 
-function Gil.drawCompactBar(mod, token)
-    mod:getFontObj(token):SetText(formatGil());
+function GilProto.drawBigBar(mod)
+    local gil = AshitaCore:GetMemoryManager():GetInventory():GetContainerItem(0, 0).Count;
+    imgui.Text(formatGil(gil));
 end
+
+function GilProto.updateCompactBar(mod, fontObj)
+    local gil = AshitaCore:GetMemoryManager():GetInventory():GetContainerItem(0, 0).Count;
+    fontObj:SetText(formatGil(gil));
+end
+
+local Gil = Module.new(GilProto);
+
+events.eachSecond:on(function()
+    if tryUpdateGil() then
+        Gil:update();
+    end
+end);
 
 ------------------
 --- Job Icon
@@ -48,45 +63,38 @@ events.load:on(function()
     bigIconTexture = images.loadTextures('default').jobicons
 end);
 
-local JobIcon = {
-    tokens = T{'[JobIcon]'}
-}
+local currentJob = 0;
+local currentLevel = 0;
 
-function JobIcon.activate(mod)
+local JobIconProto = {}
+function JobIconProto.activate(mod, fontObj)
     -- TODO: themes
     local texturePath = string.format("%s/themes/%s/ffxi-jobicons-compact.png", addon.path, "default");
-    for _, obj in pairs(mod.fontObjs) do
-        obj.auto_resize = false;
-        obj.font_height = scaling.scale_f(10);
-        obj.font_family = "Consolas";
-        obj.color_outline = 0xFF000000;
-        obj.background:SetTextureFromFile(texturePath);
-        obj.background.width = 64;
-        obj.background.height = 16;
-        obj.background.scale_x = scaling.scaled.w;
-        obj.background.scale_y = scaling.scaled.h;
-    end
+    fontObj.auto_resize = false;
+    fontObj.font_height = scaling.scale_f(10);
+    fontObj.font_family = "Consolas";
+    fontObj.color_outline = 0xFF000000;
+    fontObj.background:SetTextureFromFile(texturePath);
+    fontObj.background.width = 64;
+    fontObj.background.height = 16;
+    fontObj.background.scale_x = scaling.scaled.w;
+    fontObj.background.scale_y = scaling.scaled.h;
 end
 
-
-function JobIcon.drawBigBar(mod, token)
-    local player = AshitaCore:GetMemoryManager():GetPlayer();
-    local currJob = player:GetMainJob();
-    local jobLevel = player:GetMainJobLevel();
-
+function JobIconProto.drawBigBar(mod)
     -- TODO: this math is complicated, can we just draw the job icon sprite from the resource file
     -- and add the job and level after?
 
     if config.settings.use_job_icon[1] then
-        local imgOffsetX = (1.0 / (384 / 64)) * math.fmod(currJob - 1.0, 6.0);
-        local imgOffsetY = 0.25 * math.floor((currJob - 1) / 6.0);
+        local imgOffsetX = (1.0 / (384 / 64)) * math.fmod(currentJob - 1.0, 6.0);
+        local imgOffsetY = 0.25 * math.floor((currentJob - 1) / 6.0);
         local imgOffsetX2 = imgOffsetX + (1.0 / (384 / 64.0));
         local imgOffsetY2 = imgOffsetY + 0.25;
         imgui.Image(tonumber(ffi.cast("uint32_t", bigIconTexture)), { 64 * config.settings.font_scale, 32 * config.settings.font_scale }, { imgOffsetX, imgOffsetY }, { imgOffsetX2, imgOffsetY2 }, { 1, 1, 1, 1 }, { 1, 1, 1, 0 });
         imgui.SetCursorPos({ 43 * config.settings.font_scale, 0 });
         imgui.PushStyleVar(ImGuiStyleVar_FramePadding, { 0, 5 });
         imgui.AlignTextToFramePadding();
-        imgui.Text(string.format("%02d", jobLevel));
+        imgui.Text(string.format("%02d", currentLevel));
         imgui.PopStyleVar(1);
         imgui.SameLine();
         imgui.SetCursorPos({ 72 * config.settings.font_scale, 0 });
@@ -98,7 +106,7 @@ function JobIcon.drawBigBar(mod, token)
         imgui.AlignTextToFramePadding();
         imgui.PopStyleVar(1);
         imgui.SetCursorPos({ 10 * config.settings.font_scale, 0 });
-        imgui.Text(string.format("Lv.%02d", jobLevel));
+        imgui.Text(string.format("Lv.%02d", currentLevel));
         imgui.SameLine();
     end
 end
@@ -114,30 +122,50 @@ local function hasMasterBreaker()
     return AshitaCore:GetMemoryManager():GetPlayer():HasKeyItem(masterBreakerKIID);
 end
 
-function JobIcon.drawCompactBar(mod, token)
+function JobIconProto.updateCompactBar(mod, fontObj)
     local player = AshitaCore:GetMemoryManager():GetPlayer();
     local currJob = player:GetMainJob();
     local jobLevel = player:GetMainJobLevel();
-    local icon = mod:getFontObj(token);
 
     if (config.settings.use_job_icon[1]) then
         local imgOffsetX = 64 * math.fmod(currJob - 1.0, 6.0);
         local imgOffsetY = 17 * math.floor((currJob - 1) / 6.0);
-        icon.background.texture_offset_x = imgOffsetX;
-        icon.background.texture_offset_y = imgOffsetY;
+        fontObj.background.texture_offset_x = imgOffsetX;
+        fontObj.background.texture_offset_y = imgOffsetY;
         if (jobIsMastered() and hasMasterBreaker()) then
             jobLevel = player:GetMasteryJobLevel();
         end
-        icon.background.visible = true;
-        -- icon.text = compactBar.jobiconIndent .. string.format("%02d", jobLevel);
-        icon.text = "   " .. string.format("%02d", jobLevel);
+        fontObj.background.visible = true;
+        -- fontObj.text = compactBar.jobiconIndent .. string.format("%02d", jobLevel);
+        fontObj.text = "   " .. string.format("%02d", jobLevel);
     else
-        icon.background.visible = false;
-        icon.text = string.format("Lv.%02d", jobLevel);
+        fontObj.background.visible = false;
+        fontObj.text = string.format("Lv.%02d", jobLevel);
     end
 end
 
+local JobIcon = Module.new(JobIconProto);
+
+-- We could listen to a packet for this, but this is already a cheap check.
+events.eachSecond:on(function()
+    if events.isZoning() then return; end
+    local player = AshitaCore:GetMemoryManager():GetPlayer();
+    local job = player:GetMainJob();
+    local lvl = player:GetMainJobLevel();
+    if currentJob ~= job or currentLevel ~= lvl then
+        currentJob = job;
+        currentLevel = lvl;
+        JobIcon:update();
+    end
+end);
+events.zoning.synced:on(function()
+    local player = AshitaCore:GetMemoryManager():GetPlayer();
+    currentJob = player:GetMainJob();
+    currentLevel = player:GetMainJobLevel();
+end)
+
+
 return {
-    Gil = Module.new(Gil),
-    JobIcon = Module.new(JobIcon),
+    Gil = Gil,
+    JobIcon = JobIcon,
 }

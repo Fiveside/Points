@@ -5,13 +5,13 @@ local EventEmitter = {};
 function EventEmitter.new()
     local this = {
         handlers = {},
-        onceHandlers = {},
     };
     return setmetatable(this, { __index = EventEmitter });
 end
 
 function EventEmitter:on(callback)
     self.handlers[callback] = callback;
+    return self.off.bind(callback);
 end
 
 function EventEmitter:off(callback)
@@ -19,14 +19,14 @@ function EventEmitter:off(callback)
 end
 
 function EventEmitter:once(callback)
-    self.onceHandlers[callback] = callback;
+    local function fn(...)
+        callback(...)
+        self:off(fn);
+    end
+    return self:on(fn);
 end
 
 function EventEmitter:trigger(...)
-    for cb in pairs(self.onceHandlers) do
-        cb(...);
-    end
-    self.onceHandlers = {};
     for cb in pairs(self.handlers) do
         cb(...);
     end
@@ -95,6 +95,8 @@ end);
 local packetId = setmetatable({}, {__index=packetIdIndex});
 
 local Events = {
+    EventEmitter = EventEmitter,
+
     load = load,
     unload = unload,
     render = render,
@@ -104,9 +106,14 @@ local Events = {
     packetId = packetId,
 
     -- XI spends a lot of time without a character fully loaded: when logged out and while loading after a zone.
-    -- This event fires when a character has finished loading and all data is fully hydrated.
-    -- Its also called once on addon load if the addon is loaded while the character is in a ready state.
-    zoningComplete = EventEmitter.new(),
+    -- These events fire when a character zones, logs out, or logs in.
+    -- characterActive, synced, and complete fire immediately if the addon loads while a character is logged in.
+    zoning = {
+        begin = EventEmitter.new(), -- When screen fades to black
+        -- characterActive = EventEmitter.new(), -- When screen fades from black
+        synced = EventEmitter.new(), -- When client has finished syncing character data after a zone
+        complete = EventEmitter.new(), -- After all the above
+    },
 };
 
 
@@ -117,7 +124,11 @@ function Events.isZoning()
 end
 packetId[0x000B]:on(function(pkt)
     zoning = true;
+    Events.zoning.begin:trigger()
 end);
+-- packetId[0x000A]:on(function(pkt)
+--     Events.zoning.characterActive:trigger();
+-- end)
 packetId[0x001D]:on(function(pkt)
     -- Checking this instead of 0x000A because:
     -- 0x000A is received when the screen begins transitioning back from the black loading screen to the game
@@ -130,7 +141,8 @@ packetId[0x001D]:on(function(pkt)
 
     zoning = false;
     local party = AshitaCore:GetMemoryManager():GetParty();
-    Events.zoningComplete:trigger(party:GetMemberZone(0));
+    Events.zoning.synced:trigger();
+    Events.zoning.complete:trigger();
 end);
 load:on(function()
     -- TODO: can most of this be replaced with player:GetIsZoning()?
@@ -146,7 +158,8 @@ load:on(function()
     end
 
     zoning = false;
-    Events.zoningComplete:trigger(party:GetMemberZone(0));
+    Events.zoning.synced:trigger();
+    Events.zoning.complete:trigger();
 end);
 
 return Events;

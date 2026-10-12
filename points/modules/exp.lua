@@ -14,9 +14,42 @@ local maxExp = 1;
 -- local currentAccolades = 0;
 
 ---@type {time:number, xp:number}[]
-local xpKills = T{{time = os.time(), xp = 1000}, {time = os.time() - 60, xp = 1500}};
+local xpKills = T{};
 local xpChain = 0;
 local lastKill = 0;
+
+-- Calculated values
+local xpHr = 0;
+
+local function ratioString(xp, total)
+    return string.format(
+        "%s/%s",
+        SeparateNumbers(xp, config.settings.num_separator),
+        SeparateNumbers(total, config.settings.num_separator)
+    );
+end
+
+local XPProto = {};
+function XPProto.drawBigBar(mod)
+    imgui.Text("XP: " .. ratioString(currentExp, maxExp))
+end
+
+function XPProto.updateCompactBar(mod, fontObj)
+    fontObj:SetText("XP: " .. ratioString(currentExp, maxExp))
+end
+
+local XP = Module.new(XPProto);
+
+local XPHourProto = {};
+function XPHourProto.drawBigBar(mod)
+    imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)))
+end
+
+function XPHourProto.updateCompactBar(mod, fontObj)
+    fontObj:SetText(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)));
+end
+
+local XPHour = Module.new(XPHourProto);
 
 local function recordXpGain(xp, chain)
     local killTime = os.time();
@@ -29,12 +62,10 @@ local function recordXpGain(xp, chain)
     lastKill = os.time();
 end
 
--- Calculated values
-local xpHr = 0;
--- local timeAvg = 0;
-
 events.eachSecond:on(function()
     -- This function is generating wrong values right now.
+    if #xpKills == 0 then return; end
+
     local lastStamp = os.time()
     local allDeltas = 0;
     local allXp = 0;
@@ -44,6 +75,7 @@ events.eachSecond:on(function()
         lastStamp = entry.time;
     end
     xpHr = allXp/((allDeltas/60));
+    XPHour:update();
 end)
 
 -- https://github.com/LandSandBoat/server/blob/base/src/map/enums/msg_basic.h
@@ -125,61 +157,17 @@ events.packetId[0x061]:on(function(pkt)
 		-- currentAccolades = math.floor(pkt.data_modified:byte(0x5A) / 4) + pkt.data_modified:byte(0x5B) * 2 ^ 6 + pkt.data_modified:byte(0x5C) * 2 ^ 14;
 end);
 
-events.zoningComplete:on(function(pkt)
+events.zoning.synced:on(function(pkt)
     local player = AshitaCore:GetMemoryManager():GetPlayer();
     currentExp = player:GetExpCurrent();
     maxExp = player:GetExpNeeded();
+    xpKills:clear();
+
+    XP:update();
+    XPHour:update();
 end);
 
--- local template = "%s: %s/%s";
-
-local function ratioString(xp, total)
-    return string.format(
-        "%s/%s",
-        SeparateNumbers(xp, config.settings.num_separator),
-        SeparateNumbers(total, config.settings.num_separator)
-    );
-end
-
--- local Exp = setmetatable({}, {__index=BaseModule});
-
--- function Exp.new()
---     local this = BaseModule.new()
---     this.tokens = {"[XP]", "[XPHour]"}
---     return setmetatable(this, {__index=Exp})
--- end
-
--- function Exp:drawBigBar(token)
---     if token == "[XP]" then
---         imgui.Text("XP: " .. ratioString(currentExp, maxExp))
---     elseif token == "[XPHour]" then
---         imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)))
---     end
--- end
-
--- function Exp:drawCompactBar(token)
-
--- end
-
-local Exp = {
-    tokens = {"[XP]", "[XPHour]"}
-}
-
-function Exp.drawBigBar(mod, token)
-    if token == "[XP]" then
-        imgui.Text("XP: " .. ratioString(currentExp, maxExp))
-    elseif token == "[XPHour]" then
-        imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)))
-    end
-end
-
-function Exp.drawCompactBar(mod, token)
-    local fontObj = mod:getFontObj(token);
-    if token == "[XP]" then
-        fontObj:SetText("XP: " .. ratioString(currentExp, maxExp))
-    elseif token == "[XPHour]" then
-        fontObj:SetText(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)));
-    end
-end
-
-return Module.new(Exp);
+return {
+    XP = XP,
+    XPHour = XPHour,
+};
