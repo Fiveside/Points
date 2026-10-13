@@ -15,6 +15,7 @@ local emptyModule = {
     deactivate = function(mod) end,
     drawBigBar = function(mod) end,
     updateCompactBar = function(mod, fontObj) end,
+    drawCompactBar = function(mod) end,
 }
 function emptyModule.initFontObj(mod)
     -- TODO: move this back to something configurable.
@@ -66,6 +67,10 @@ end
 ---Called each frame during the d3d_present render phase.
 function Module:drawBigBar()
     self.impl.drawBigBar(self);
+end
+
+function Module:drawCompactBar()
+    self.impl.drawCompactBar(self);
 end
 
 ---Call this when a value has changed and the compact bar needs to be updated with the new value.

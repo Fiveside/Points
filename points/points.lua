@@ -474,6 +474,7 @@ ashita.events.register("d3d_present", "present_cb", function ()
 
     if not events.isZoning() then
         modman:drawBigBar();
+        modman:drawCompactBar();
     end
 end);
 

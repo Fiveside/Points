@@ -137,6 +137,76 @@ function ModuleManager:drawBigBar()
     imgui.PopStyleVar(1);
 end
 
+local function imguiStackComponent(pusher, popper)
+    local count = 0;
+    return {
+        push = function(...)
+            count = count + 1;
+            return pusher(...);
+        end,
+        popAll = function()
+            if count > 0 then
+                return popper(count);
+            end
+        end,
+    }
+end
+
+local function styleStack()
+    local vars = imguiStackComponent(imgui.PushStyleVar, imgui.PopStyleVar);
+    local colors = imguiStackComponent(imgui.PushStyleColor, imgui.PopStyleColor);
+    return {
+        vars = vars,
+        colors = colors,
+        popall = function()
+            vars.popAll();
+            colors.popAll();
+        end
+    };
+end
+
+function ModuleManager:drawCompactBar()
+    local styles = styleStack();
+
+    -- TODO: figure out the exact height we want the window to be.
+    local windowHeight = scaling.scale_h(-17);
+    local lineHeight = imgui.GetTextLineHeight();
+    imgui.SetNextWindowPos({ 131, 600 }, ImGuiCond_FirstUseEver, {0, 1});
+    imgui.SetNextWindowSizeConstraints({ 250, lineHeight }, { -1, -1 });
+
+    styles.vars.push(ImGuiStyleVar_WindowPadding, { 1, 1 });
+    styles.vars.push(ImGuiStyleVar_WindowMinSize, { 0, 0 });
+    styles.vars.push(ImGuiStyleVar_WindowBorderSize, 1);
+
+    styles.colors.push(ImGuiCol_WindowBg, { 0, 0, 0, 1 });
+    styles.colors.push(ImGuiCol_Border, config.settings.colors.bgBorder);
+
+    local windowFlags = bit.bor(
+        -- ImGuiWindowFlags_NoInputs,
+        ImGuiWindowFlags_NoCollapse,
+        ImGuiWindowFlags_NoTitleBar,
+        ImGuiWindowFlags_NoResize,
+        ImGuiWindowFlags_NoScrollbar,
+        ImGuiWindowFlags_NoScrollWithMouse,
+        ImGuiWindowFlags_NoSavedSettings,
+        ImGuiWindowFlags_NoFocusOnAppearing,
+        ImGuiWindowFlags_NoNav,
+
+        ImGuiWindowFlags_AlwaysAutoResize
+    );
+    if imgui.Begin("PointsBar##compact_points_bar", {true}, windowFlags) then
+        for i, token in ipairs(self.tokens) do
+            if i > 1 then
+                imgui.SameLine();
+            end
+            self.byToken[token]:drawCompactBar();
+        end
+        imgui.End();
+    end
+
+    styles.popall();
+end
+
 
 function ModuleManager:showCompactBar()
     self.compactWrapper.visible = true;

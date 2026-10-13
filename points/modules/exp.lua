@@ -34,6 +34,10 @@ function XPProto.drawBigBar(mod)
     imgui.Text("XP: " .. ratioString(currentExp, maxExp))
 end
 
+function XPProto.drawCompactBar(mod)
+    imgui.Text("XP: " .. ratioString(currentExp, maxExp))
+end
+
 function XPProto.updateCompactBar(mod, fontObj)
     fontObj:SetText("XP: " .. ratioString(currentExp, maxExp))
 end
@@ -42,6 +46,10 @@ local XP = Module.new(XPProto);
 
 local XPHourProto = {};
 function XPHourProto.drawBigBar(mod)
+    imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)))
+end
+
+function XPHourProto.drawCompactBar(mod)
     imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)))
 end
 

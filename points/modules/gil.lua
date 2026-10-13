@@ -32,6 +32,8 @@ function GilProto.drawBigBar(mod)
     imgui.Text(formatGil(gil));
 end
 
+GilProto.drawCompactBar = GilProto.drawBigBar;
+
 function GilProto.updateCompactBar(mod, fontObj)
     local gil = AshitaCore:GetMemoryManager():GetInventory():GetContainerItem(0, 0).Count;
     fontObj:SetText(formatGil(gil));
