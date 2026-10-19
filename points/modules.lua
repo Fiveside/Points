@@ -56,10 +56,10 @@ function ModuleManager:setActiveTokens(tokens)
         if self.active[mod] == nil then
             mod:activate();
             mod:updateCompactBar();
-            self.active[mod] = mod.needsUpdate:on(function()
-                mod:updateCompactBar();
-                self:reflowCompactBar();
-            end);
+            -- self.active[mod] = mod.needsUpdate:on(function()
+            --     mod:updateCompactBar();
+            --     self:reflowCompactBar();
+            -- end);
         end
     end
 
@@ -191,6 +191,8 @@ function ModuleManager:drawCompactBar()
         ImGuiWindowFlags_NoSavedSettings,
         ImGuiWindowFlags_NoFocusOnAppearing,
         ImGuiWindowFlags_NoNav,
+        ImGuiWindowFlags_NoNavFocus,
+        ImGuiWindowFlags_NoDocking,
 
         ImGuiWindowFlags_AlwaysAutoResize
     );
@@ -209,16 +211,16 @@ end
 
 
 function ModuleManager:showCompactBar()
-    self.compactWrapper.visible = true;
-    -- self.compactWrapper.background.visible = true;
+    -- self.compactWrapper.visible = true;
+    -- -- self.compactWrapper.background.visible = true;
 
-    for _, token in ipairs(self.tokens) do
-        local mod = self.byToken[token];
-        mod:updateCompactBar();
-        mod.fontObj.visible = true;
-    end
+    -- for _, token in ipairs(self.tokens) do
+    --     local mod = self.byToken[token];
+    --     mod:updateCompactBar();
+    --     mod.fontObj.visible = true;
+    -- end
 
-    self:reflowCompactBar()
+    -- self:reflowCompactBar()
 end
 
 function ModuleManager:hideCompactBar()
@@ -230,12 +232,15 @@ function ModuleManager:hideCompactBar()
 end
 
 local expModules = require('modules.exp');
+local benchmark = require('modules.benchmark');
 
 local modman = ModuleManager.new();
 modman:register(require('modules.gil'), "[Gil]")
 modman:register(require('modules.jobicon'), "[JobIcon]")
 modman:register(expModules.XP, "[XP]")
-modman:register(expModules.XPHour, "[XPHour]")
+modman:register(expModules.XPHour, "[XPHour]");
+modman:register(benchmark.mod, "[Bench]");
+modman:register(benchmark.mod2, "[Bench2]");
 
 
 -- TODO: this really belongs somewhere else
@@ -244,6 +249,15 @@ events.zoning.begin:on(function()
 end);
 events.zoning.complete:on(function()
     modman:showCompactBar();
+end);
+
+events.render:on(function()
+    if events.isZoning() then return; end
+    local delta = benchmark.bench(function()
+        modman:drawBigBar();
+        modman:drawCompactBar();
+    end);
+    benchmark.reportTime(delta);
 end);
 
 return modman;

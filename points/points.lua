@@ -387,7 +387,7 @@ end);
 -- func: d3d_present
 -- desc: Event called when the Direct3D device is presenting a scene.
 ----------------------------------------------------------------------------------------------------
-ashita.events.register("d3d_present", "present_cb", function ()
+local function onD3dPresent()
     if (not points.loaded and GetPlayerEntity() ~= nil) then
         InitPointsBar();
         return;
@@ -472,10 +472,16 @@ ashita.events.register("d3d_present", "present_cb", function ()
         config.uiSettings.changed = false;
     end
 
-    if not events.isZoning() then
-        modman:drawBigBar();
-        modman:drawCompactBar();
-    end
+    -- if not events.isZoning() then
+    --     modman:drawBigBar();
+    --     modman:drawCompactBar();
+    -- end
+end
+
+local bench = require('modules.benchmark');
+ashita.events.register("d3d_present", "present_cb", function()
+    local delta = bench.bench(onD3dPresent);
+    bench.reportTime2(delta);
 end);
 
 function DrawPointsBar(currJob)
@@ -860,7 +866,7 @@ function UpdateTokenList(zoneId, reset, jobId)
     end
 
     -- TODO: make configurable
-    modman:setActiveTokens("[JobIcon] [Gil] [XP] [XPHour]")
+    modman:setActiveTokens("[JobIcon] [Gil] [XP] [XPHour] [Bench] [Bench2]")
 end
 
 function ResetXPCPRates()    

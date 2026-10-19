@@ -122,11 +122,11 @@ function JobIconProto.drawCompactBar(mod)
     local iconHeight = compactIcon.height / 4
 
     local xOff = (currentJob - 1) % 6;
-    local yOff = math.floor(currentJob / 4);
+    local yOff = math.floor((currentJob - 1) / 6);
     local viewportX = (iconWidth * xOff) / compactIcon.width;
     local viewportX2 = (iconWidth * (xOff + 1)) / compactIcon.width;
     local viewportY = (iconHeight * yOff) / compactIcon.height;
-    local viewportY2 = (iconHeight + (yOff + 1)) / compactIcon.height;
+    local viewportY2 = (iconHeight * (yOff + 1)) / compactIcon.height;
 
     local height = imgui.GetTextLineHeight();
     local width = height * (iconWidth / iconHeight);

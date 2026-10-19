@@ -13,13 +13,79 @@ local maxExp = 1;
 
 -- local currentAccolades = 0;
 
----@type {time:number, xp:number}[]
-local xpKills = T{};
-local xpChain = 0;
-local lastKill = 0;
+---@class XPCounter
+---@field private kills {time:number, xp:number}[] History of timestamps when we received exp. Ordered oldest to newest. Capped at 50
+---@field chain integer Current xp chain
+---@field perHour number current xp per hour
+---@field endTimestamp number timestamp when current chain should end.
+local XPCounter = {};
+function XPCounter.new()
+    local this = {
+        kills = T {},
+        chain = 0,
+        perHour = 0,
+        endTimestamp = 0,
+    };
+    return setmetatable(this, { __index = XPCounter });
+end
 
--- Calculated values
-local xpHr = 0;
+function XPCounter:recordGain(xp, chain)
+    local killTime = os.time();
+    table.insert(self.kills, { time = killTime, xp = xp });
+    if #self.kills > 50 then
+        table.remove(self.kills, 1);
+    end
+
+    local myLevel = AshitaCore:GetMemoryManager():GetPlayer():GetMainJobLevel();
+    local chainThreshes;
+    for i = #XPChainTimers, 1, -1 do
+        if XPChainTimers[i].lvl >= myLevel then
+            chainThreshes = XPChainTimers[i].maxtime
+        end
+    end
+
+    self.chain = chain;
+    if self.chain >= 1 then
+        self.endTimestamp = os.time() + chainThreshes[math.min(chain, #chainThreshes)]
+    end
+end
+
+function XPCounter:updateComputedValues()
+    if #self.kills == 0 then
+        self.endTimestamp = 0;
+        self.perHour = 0;
+        return false;
+    end
+
+    local lastStamp = os.time()
+    local allDeltas = 0;
+    local allXp = 0;
+
+    for i = #self.kills, 1, -1 do
+        local entry = self.kills[i];
+        allXp = allXp + entry.xp;
+        allDeltas = allDeltas + (lastStamp - entry.time);
+        lastStamp = entry.time;
+    end
+    local avgXpSec = allXp / allDeltas;
+    self.perHour = avgXpSec * 60 * 60;
+
+    if self.endTimestamp < os.time() then
+        self.chain = 0;
+    end
+
+    return true;
+end
+
+function XPCounter:clear()
+    self.kills:clear();
+    self.chain = 0;
+    self.endTimestamp = 0;
+    self.perHour = 0;
+end
+
+local xp = XPCounter.new();
+local capacityPoints = XPCounter.new();
 
 local function ratioString(xp, total)
     return string.format(
@@ -29,65 +95,52 @@ local function ratioString(xp, total)
     );
 end
 
-local XPProto = {};
-function XPProto.drawBigBar(mod)
-    imgui.Text("XP: " .. ratioString(currentExp, maxExp))
+---Determines if we should be tracking exp points or limit points.
+---@return boolean
+local function isTrackingLimitPoints()
+    local player = AshitaCore:GetMemoryManager():GetPlayer();
+    local cappedExp = currentExp == 55999;
+    local inLimitMode = player:GetIsLimitModeEnabled() or player:GetIsExperiencePointsLocked();
+    return cappedExp or (inLimitMode and player:GetMainJobLevel() >= 75);
 end
 
-function XPProto.drawCompactBar(mod)
-    imgui.Text("XP: " .. ratioString(currentExp, maxExp))
-end
+local XP = Module.new({
+    drawBigBar = function()
+        imgui.Text("XP: " .. ratioString(currentExp, maxExp))
+    end,
+    drawCompactBar = function()
+        imgui.Text("XP: " .. ratioString(currentExp, maxExp))
+    end,
+    updateCompactBar = function(mod, fontObj)
+        fontObj:SetText("XP: " .. ratioString(currentExp, maxExp))
+    end,
+});
 
-function XPProto.updateCompactBar(mod, fontObj)
-    fontObj:SetText("XP: " .. ratioString(currentExp, maxExp))
-end
+local XPHour = Module.new({
+    drawBigBar = function(mod)
+        imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(AbbreviateNum(xp.perHour), config.settings.num_separator)))
+    end,
 
-local XP = Module.new(XPProto);
+    drawCompactBar = function(mod)
+        imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(AbbreviateNum(xp.perHour), config.settings.num_separator)))
+    end,
 
-local XPHourProto = {};
-function XPHourProto.drawBigBar(mod)
-    imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)))
-end
-
-function XPHourProto.drawCompactBar(mod)
-    imgui.Text(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)))
-end
-
-function XPHourProto.updateCompactBar(mod, fontObj)
-    fontObj:SetText(string.format("(%s XP/hr)", SeparateNumbers(xpHr, config.settings.num_separator)));
-end
-
-local XPHour = Module.new(XPHourProto);
-
-local function recordXpGain(xp, chain)
-    local killTime = os.time();
-    table.insert(xpKills, {time=killTime, xp=xp});
-    if #xpKills > 50 then
-        table.remove(xpKills, 1);
+    updateCompactBar = function(mod, fontObj)
+        fontObj:SetText(string.format("(%s XP/hr)",
+            SeparateNumbers(AbbreviateNum(xp.perHour), config.settings.num_separator)));
     end
-
-    xpChain = chain;
-    lastKill = os.time();
-end
+})
 
 events.eachSecond:on(function()
-    -- This function is generating wrong values right now.
-    if #xpKills == 0 then return; end
+    xp:updateComputedValues();
 
-    local lastStamp = os.time()
-    local allDeltas = 0;
-    local allXp = 0;
-    for _, entry in ipairs(xpKills) do
-        allXp = allXp + entry.xp;
-        allDeltas = allDeltas + (lastStamp - entry.time);
-        lastStamp = entry.time;
-    end
-    xpHr = allXp/((allDeltas/60));
+    -- We really only need to notify when the value changes, but the update is pretty cheap and only
+    -- happens once a second anyway, so a blind update should be ok.
     XPHour:update();
 end)
 
 -- https://github.com/LandSandBoat/server/blob/base/src/map/enums/msg_basic.h
-local xpMessages = T{
+local xpMessages = T {
     8,   -- <player> gains # experience points.
     105, -- ?
     253, -- EXP chain #! <player> gains # experience points.
@@ -95,14 +148,14 @@ local xpMessages = T{
     372, -- Limit chain ##! <player> gains # limit points.
 }
 
-local capactiyMessages = T{
+local capactiyMessages = T {
     718, -- <player> gains # capacity points.
     735, -- Capacity chain ##! <player> gains # capacity points.
 }
 
 local jobPoints = 719; -- <player> earns a job point! (Total: #)
 
-local meritMessages = T{
+local meritMessages = T {
     50,  -- <player> earns a merit point! (Total: #)
     368, -- ?
 }
@@ -117,7 +170,7 @@ events.packetId[0x02D]:on(function(pkt)
         return;
     end
     if xpMessages:contains(msgId) then
-        recordXpGain(val, val2);
+        xp:recordGain(val, val2);
     end
 
     -- local killTime = os.clock();
@@ -158,18 +211,19 @@ events.packetId[0x02D]:on(function(pkt)
 end);
 
 events.packetId[0x061]:on(function(pkt)
-        currentExp = struct.unpack("H", pkt.data_modified, 0x011);
-        maxExp = struct.unpack("H", pkt.data_modified, 0x13);
-        -- currentMastery = struct.unpack("I", pkt.data_modified, 0x69);
-        -- maxMastery = struct.unpack("I", pkt.data_modified, 0x6D);
-		-- currentAccolades = math.floor(pkt.data_modified:byte(0x5A) / 4) + pkt.data_modified:byte(0x5B) * 2 ^ 6 + pkt.data_modified:byte(0x5C) * 2 ^ 14;
+    currentExp = struct.unpack("H", pkt.data_modified, 0x011);
+    maxExp = struct.unpack("H", pkt.data_modified, 0x13);
+    -- currentMastery = struct.unpack("I", pkt.data_modified, 0x69);
+    -- maxMastery = struct.unpack("I", pkt.data_modified, 0x6D);
+    -- currentAccolades = math.floor(pkt.data_modified:byte(0x5A) / 4) + pkt.data_modified:byte(0x5B) * 2 ^ 6 + pkt.data_modified:byte(0x5C) * 2 ^ 14;
 end);
 
 events.zoning.synced:on(function(pkt)
     local player = AshitaCore:GetMemoryManager():GetPlayer();
     currentExp = player:GetExpCurrent();
     maxExp = player:GetExpNeeded();
-    xpKills:clear();
+
+    xp:clear();
 
     XP:update();
     XPHour:update();
